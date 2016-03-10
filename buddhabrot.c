@@ -24,7 +24,7 @@ int to_index(double x, double y, int width, int height) {
 }
 
 color_t clamp(double v) {
-    v *= 3;
+    v *= 0.5;
     if (v > 255) {
         return 255;
     }
@@ -32,9 +32,8 @@ color_t clamp(double v) {
 }
 
 int main() {
-    printf("moi\n");
-    int width = 600;
-    int height = 600;
+    int width = 100;
+    int height = 100;
     int num_pixels = width * height;
     double *rbins = calloc(num_pixels, sizeof(double));
     double *gbins = calloc(num_pixels, sizeof(double));
@@ -42,32 +41,45 @@ int main() {
 
     double bailout = 4.0;
     int max_iter = 1000;
-    int samples = 1000000000;
+    int samples = 30000000;
     int *trajectory = malloc(max_iter * sizeof(int));
     for (int i = 0; i < samples; i++) {
-        double x = 4 * uniform();
-        double y = 4 * uniform();
-        double zx = 0.0;
-        double zy = 0.0;
+        double cx = 2 * uniform();
+        double cy = 2 * uniform();
+
+        // Check main cardioid and 2-period bulb.
+        double q = cx - 0.25;
+        double cy2 = cy * cy;
+        q = q*q + cy2;
+        if (q * (q + (cx - 0.25)) < 0.25 * cy2) {
+            continue;
+        }
+        if ((cx + 1) * (cx + 1) + cy2 < 0.0625) {
+            continue;
+        }
+
+        double x = 0.0;
+        double y = 0.0;
         for (int j = 0; j < max_iter; j++) {
-            double t = zx;
-            zx = zx*zx - zy*zy + x;
-            zy = 2 * t*zy + y;
-            trajectory[j] = to_index(zx, zy, width, height);
-            if (zx*zx + zy*zy > bailout) {
-                for (int k = 1; k < j + 1; k++) {
+            double x2 = x*x;
+            double y2 = y*y;
+            if (x2 + y2 > bailout) {
+                for (int k = 1; k < j; k++) {
                     if (k % 3 != 0 || k % 5 != 0) {
                         continue;
                     }
                     int index = trajectory[k];
                     if (index >= 0) {
-                        rbins[index] += exp(-0.0001*(k-15)*(k-15)) * 0.5;
-                        gbins[index] += exp(-0.0001*(k-300)*(k-300));
-                        bbins[index] += exp(-0.0001*(k-600)*(k-600)) * 5;
+                        rbins[index] += exp(-0.00001*(k-20)*(k-20)) * 0.6;
+                        gbins[index] += exp(-0.00006*(k-220)*(k-220));
+                        bbins[index] += exp(-0.0001*(k-500)*(k-500)) * 5;
                     }
                 }
                 break;
             }
+            y = 2 * x*y + cy;
+            x = x2 - y2 + cx;
+            trajectory[j] = to_index(x, y, width, height);
         }
     }
 
