@@ -3,17 +3,21 @@
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
-
-typedef unsigned char color_t;
-typedef double bin_t;
+#include <limits.h>
+#include "buddhabrot.h"
 
 double uniform() {
     return 2 * (((double) rand()) / RAND_MAX) - 1;
 }
 
 int to_index(double x, double y, double z, int width, int height) {
-    x += 0.15 * z;
-    y += 0.15 * z;
+    double t = x;
+    x = 0.62348980185873359 * x - 0.7818314824680298 * z;
+    z = 0.62348980185873359 * z + 0.7818314824680298 * t;
+    t = y;
+    y = 0.95557280578614068 * y - 0.29475517441090421 * z;
+    // z = 0.95557280578614068 * z + 0.29475517441090421 * t;
+
     x = (x + 1.5) * 0.3333;
     y = (y + 1.5) * 0.3333;
     if (x < 0 || x > 1 || y < 0 || y > 1) {
@@ -28,33 +32,39 @@ int to_index(double x, double y, double z, int width, int height) {
     return index;
 }
 
-color_t clamp(double v) {
-    v *= 1;
-    if (v > 255) {
-        return 255;
+int main(int argc, char *argv[]) {
+    if (argc < 3) {
+        printf("Need width, height and number of layers.\n");
+        return 1;
     }
-    return (color_t) v;
-}
-
-int main() {
-    int width = 100;
-    int height = 100;
-    int num_pixels = width * height;
-    bin_t *rbins = calloc(num_pixels, sizeof(bin_t));
-    bin_t *gbins = calloc(num_pixels, sizeof(bin_t));
-    bin_t *bbins = calloc(num_pixels, sizeof(bin_t));
+    int width = atoi(argv[1]);
+    int height = atoi(argv[2]);
+    size_t num_layers = atoi(argv[3]);
+    size_t num_pixels = width * height;
+    size_t num_bins = num_pixels * num_layers;
+    bin_t *bins = calloc(num_bins, sizeof(bin_t));
 
     double bailout = 4.0;
     size_t max_iter = 2000;
-    size_t samples = 10000000ULL;
-    int num_symmetries = 2;  // Flip y-axis
+    size_t save_interval = 50000000;
+
+    size_t num_symmetries = 2;  // Flip y-axis
     num_symmetries *= 5;  // Rotational symmetry when n=6
     int *trajectory = malloc(num_symmetries * max_iter * sizeof(int));
     srand(time(0));
-    for (size_t i = 0; i < samples; i++) {
-        if (i % 1000000 == 0) {
-            printf("%zu\n", (i * 100) / samples);
+    size_t i = 0;
+
+    FILE *f;
+
+    while(1) {
+        if (i % save_interval == save_interval - 1) {
+            f = fopen("buddhabulb_bins.dat", "wb");
+            fwrite((void*) bins, sizeof(bin_t), num_bins, f);
+            fclose(f);
+            printf("Save done\n");
         }
+        i++;
+
         double cx = 4 * uniform();
         double cy = 4 * uniform();
         double cz = 4 * uniform();
@@ -71,16 +81,14 @@ int main() {
             double rxy = x2 + y2;
             double r = rxy + z*z;
             if (r > bailout) {
-                for (size_t k = 3; k < j; k++) {
-                    if (k % 3 != 0) {
-                        continue;
-                    }
+                for (size_t k = 0; k < j; k++) {
                     for (size_t s = 0; s < num_symmetries; s++) {
                         int index = trajectory[num_symmetries * k + s];
                         if (index >= 0) {
-                            rbins[index] += exp(-0.0001*(k-15)*(k-15)) * 0.5;
-                            gbins[index] += exp(-0.0001*(k-300)*(k-300));
-                            bbins[index] += exp(-0.0001*(k-600)*(k-600)) * 4;
+                            index += k * num_pixels;
+                            if (index < num_bins && bins[index] < BIN_MAX) {
+                                bins[index]++;
+                            }
                         }
                     }
                 }
@@ -138,21 +146,5 @@ int main() {
         }
     }
 
-    FILE *f = fopen("bins.dat", "wb");
-    fwrite((void*) rbins, sizeof(bin_t), num_pixels, f);
-    fwrite((void*) gbins, sizeof(bin_t), num_pixels, f);
-    fwrite((void*) bbins, sizeof(bin_t), num_pixels, f);
-    fclose(f);
-
-    f = fopen("temp.raw", "wb");
-    for (int i = 0; i < num_pixels; i++) {
-        color_t red = clamp(rbins[i]);
-        fwrite((void*) &red, sizeof(color_t), 1, f);
-        color_t green = clamp(gbins[i]);
-        fwrite((void*) &green, sizeof(color_t), 1, f);
-        color_t blue = clamp(bbins[i]);
-        fwrite((void*) &blue, sizeof(color_t), 1, f);
-    }
-    fclose(f);
     return 0;
 }
