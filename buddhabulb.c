@@ -38,8 +38,8 @@ color_t clamp(double v) {
 }
 
 int main() {
-    int width = 100;
-    int height = 100;
+    int width = 200;
+    int height = 200;
     int num_pixels = width * height;
     bin_t *rbins = calloc(num_pixels, sizeof(bin_t));
     bin_t *gbins = calloc(num_pixels, sizeof(bin_t));
@@ -47,7 +47,7 @@ int main() {
 
     double bailout = 4.0;
     size_t max_iter = 2000;
-    size_t samples = 100000000ULL;
+    size_t samples = 500000000ULL;
     int **trajectories = malloc(omp_get_max_threads() * sizeof(int*));
     for (int i = 0; i < omp_get_max_threads(); i++) {
         trajectories[i] = malloc(max_iter * sizeof(int));
@@ -69,7 +69,9 @@ int main() {
             double y = 0.0;
             double z = 0.0;
             for (size_t j = 0; j < max_iter; j++) {
-                double rxy = x*x + y*y;
+                double x2 = x*x;
+                double y2 = y*y;
+                double rxy = x2 + y2;
                 double r = rxy + z*z;
                 if (r > bailout) {
                     for (size_t k = 3; k < j; k++) {
@@ -88,13 +90,34 @@ int main() {
                     }
                     break;
                 }
-                r *= r * r;
-                double phi = atan2(y, x);
-                double theta = atan2(sqrt(rxy), z);
-                x = r * sin(6 * theta);
-                y = x * sin(6 * phi) + cy;
-                x = x * cos(6 * phi) + cx;
-                z = r * cos(6 * theta) + cz;
+
+                // Special case for n=6
+                double x4 = x2 * x2;
+                double x6 = x2 * x4;
+                double y4 = y2 * y2;
+                double y6 = y2 * y4;
+                double z2 = z * z;
+                double z4 = z2 * z2;
+                if (rxy > 0.000001) {
+                    double q = pow(rxy, -2.5);
+                    y = 4*x*y*(3*x4 - 10*x2*y2 + 3*y4)*z*(x2 + y2 - 3*z2)*(3*(x2 + y2) - z2) * q + cy;
+                    x = 2*(x6 - 15*x4*y2 + 15*x2*y4 - y6)*z*(x2 + y2 - 3*z2)*(3*(x2 + y2) - z2) * q + cx;
+                }
+                else {
+                    y = cy;
+                    x = cx;
+                }
+                z = -(rxy - z2)*(rxy * (rxy - 14*z2) + z4) + cz;
+
+                // General formula
+                // r *= r * r;
+                // double phi = atan2(y, x);
+                // double theta = atan2(sqrt(rxy), z);
+                // double x = r * sin(6 * theta);
+                // double y = x * sin(6 * phi) + cy;
+                // x = x * cos(6 * phi) + cx;
+                // z = r * cos(6 * theta) + cz;
+
                 trajectories[tid][j] = to_index(x, y, z, width, height);
             }
         }
