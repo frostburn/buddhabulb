@@ -30,7 +30,7 @@ int to_index(double x, double y, double z, int width, int height) {
 }
 
 color_t clamp(double v) {
-    v *= 0.001;
+    v *= 1;
     if (v > 255) {
         return 255;
     }
@@ -38,8 +38,8 @@ color_t clamp(double v) {
 }
 
 int main() {
-    int width = 1000;
-    int height = 1000;
+    int width = 100;
+    int height = 100;
     int num_pixels = width * height;
     bin_t *rbins = calloc(num_pixels, sizeof(bin_t));
     bin_t *gbins = calloc(num_pixels, sizeof(bin_t));
@@ -47,7 +47,7 @@ int main() {
 
     double bailout = 4.0;
     size_t max_iter = 2000;
-    size_t samples = 2000ULL * 10000000ULL;
+    size_t samples = 100000000ULL;
     int **trajectories = malloc(omp_get_max_threads() * sizeof(int*));
     for (int i = 0; i < omp_get_max_threads(); i++) {
         trajectories[i] = malloc(max_iter * sizeof(int));
@@ -88,14 +88,13 @@ int main() {
                     }
                     break;
                 }
-                r *= r;
-                r *= r;
+                r *= r * r;
                 double phi = atan2(y, x);
-                double theta = atan2(z, sqrt(rxy));
-                x = r * sin(8 * theta);
-                y = x * sin(8 * phi) + cy;
-                x = x * cos(8 * phi) + cx;
-                z = r * cos(8 * theta) + cz;
+                double theta = atan2(sqrt(rxy), z);
+                x = r * sin(6 * theta);
+                y = x * sin(6 * phi) + cy;
+                x = x * cos(6 * phi) + cx;
+                z = r * cos(6 * theta) + cz;
                 trajectories[tid][j] = to_index(x, y, z, width, height);
             }
         }
