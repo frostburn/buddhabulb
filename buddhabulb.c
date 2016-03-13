@@ -46,15 +46,21 @@ int main() {
 
     double bailout = 4.0;
     size_t max_iter = 2000;
-    size_t samples = 100000000ULL;
-    int *trajectory = malloc(max_iter * sizeof(int));
+    size_t samples = 10000000ULL;
+    int num_symmetries = 2;  // Flip y-axis
+    num_symmetries *= 5;  // Rotational symmetry when n=6
+    int *trajectory = malloc(num_symmetries * max_iter * sizeof(int));
     srand(time(0));
     for (size_t i = 0; i < samples; i++) {
+        if (i % 1000000 == 0) {
+            printf("%zu\n", (i * 100) / samples);
+        }
         double cx = 4 * uniform();
         double cy = 4 * uniform();
         double cz = 4 * uniform();
-        if (i % 1000000 == 0) {
-            printf("%zu\n", (i * 100) / samples);
+        // Check main bulb.
+        if (cx*cx + cy*cy + cz*cz < 0.345) {
+            continue;
         }
         double x = 0.0;
         double y = 0.0;
@@ -69,10 +75,9 @@ int main() {
                     if (k % 3 != 0) {
                         continue;
                     }
-                    int index = trajectory[k];
-                    if (index >= 0) {
-                        #pragma omp critical
-                        {
+                    for (size_t s = 0; s < num_symmetries; s++) {
+                        int index = trajectory[num_symmetries * k + s];
+                        if (index >= 0) {
                             rbins[index] += exp(-0.0001*(k-15)*(k-15)) * 0.5;
                             gbins[index] += exp(-0.0001*(k-300)*(k-300));
                             bbins[index] += exp(-0.0001*(k-600)*(k-600)) * 4;
@@ -109,7 +114,27 @@ int main() {
             // x = x * cos(6 * phi) + cx;
             // z = r * cos(6 * theta) + cz;
 
-            trajectory[j] = to_index(x, y, z, width, height);
+            trajectory[num_symmetries * j] = to_index(x, y, z, width, height);
+            trajectory[num_symmetries * j + 1] = to_index(x, -y, z, width, height);
+            double tx = 0.30901699437494745 * x - 0.95105651629515353 * y;
+            double ty = 0.30901699437494745 * y + 0.95105651629515353 * x;
+            trajectory[num_symmetries * j + 2] = to_index(tx, ty, z, width, height);
+            trajectory[num_symmetries * j + 3] = to_index(tx, -ty, z, width, height);
+            double ttx = tx;
+            tx = 0.30901699437494745 * tx - 0.95105651629515353 * ty;
+            ty = 0.30901699437494745 * ty + 0.95105651629515353 * ttx;
+            trajectory[num_symmetries * j + 4] = to_index(tx, ty, z, width, height);
+            trajectory[num_symmetries * j + 5] = to_index(tx, -ty, z, width, height);
+            ttx = tx;
+            tx = 0.30901699437494745 * tx - 0.95105651629515353 * ty;
+            ty = 0.30901699437494745 * ty + 0.95105651629515353 * ttx;
+            trajectory[num_symmetries * j + 6] = to_index(tx, ty, z, width, height);
+            trajectory[num_symmetries * j + 7] = to_index(tx, -ty, z, width, height);
+            ttx = tx;
+            tx = 0.30901699437494745 * tx - 0.95105651629515353 * ty;
+            ty = 0.30901699437494745 * ty + 0.95105651629515353 * ttx;
+            trajectory[num_symmetries * j + 8] = to_index(tx, ty, z, width, height);
+            trajectory[num_symmetries * j + 9] = to_index(tx, -ty, z, width, height);
         }
     }
 
