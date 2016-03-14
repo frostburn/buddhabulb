@@ -1,6 +1,8 @@
 *.raw
 *.dat
+*.gif
 a.out
 buddhabrot
 process
 buddhabulb
+tmp

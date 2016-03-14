@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -10,16 +11,19 @@ double uniform() {
     return 2 * (((double) rand()) / RAND_MAX) - 1;
 }
 
-int to_index(double x, double y, double z, int width, int height) {
-    double t = x;
-    x = 0.62348980185873359 * x - 0.7818314824680298 * z;
-    z = 0.62348980185873359 * z + 0.7818314824680298 * t;
-    t = y;
-    y = 0.95557280578614068 * y - 0.29475517441090421 * z;
-    // z = 0.95557280578614068 * z + 0.29475517441090421 * t;
+static double *COSINES;
+static double *SINES;
 
-    x = (x + 1.5) * 0.3333;
-    y = (y + 1.5) * 0.3333;
+int to_index(double x, double y, double z, int frame, int width, int height) {
+    double c = COSINES[frame];
+    double s = SINES[frame];
+    double temp = x;
+    x = c * x - s * z;
+    z = c * z + s * temp;
+    y = 0.95557280578614068 * y - 0.29475517441090421 * z;
+
+    x = (x + 1.5) * 0.333333;
+    y = (y + 1.5) * 0.333333;
     if (x < 0 || x > 1 || y < 0 || y > 1) {
         return -1;
     }
@@ -33,28 +37,44 @@ int to_index(double x, double y, double z, int width, int height) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        printf("Need width, height and number of layers.\n");
+    if (argc < 5) {
+        printf("Need width, height, number of layers and number of frames.\n");
         return 1;
     }
     int width = atoi(argv[1]);
     int height = atoi(argv[2]);
     size_t num_layers = atoi(argv[3]);
+    size_t num_frames = atoi(argv[4]);
     size_t num_pixels = width * height;
-    size_t num_bins = num_pixels * num_layers;
+    size_t num_bins = num_pixels * num_layers * num_frames;
     bin_t *bins = calloc(num_bins, sizeof(bin_t));
+
+    FILE *f;
+    if (argc == 6) {
+        f = fopen("buddhabulb_bins.dat", "rb");
+        assert(fread((void*) bins, sizeof(bin_t), num_bins, f));
+        fclose(f);
+        printf("Load done\n");
+    }
+
+    COSINES = malloc(sizeof(double) * num_frames);
+    SINES = malloc(sizeof(double) * num_frames);
+
+    for (int frame = 0; frame < num_frames; frame++) {
+        COSINES[frame] = cos(1 + (2 * M_PI * frame) / num_frames);
+        SINES[frame] = sin(1 + (2 * M_PI * frame) / num_frames);
+    }
 
     double bailout = 4.0;
     size_t max_iter = 2000;
-    size_t save_interval = 50000000;
+    size_t save_interval = 5000000;
 
-    size_t num_symmetries = 2;  // Flip y-axis
+    size_t num_symmetries = 1;
+    num_symmetries *= 2;  // Flip y-axis
     num_symmetries *= 5;  // Rotational symmetry when n=6
-    int *trajectory = malloc(num_symmetries * max_iter * sizeof(int));
+    int *trajectory = malloc(num_frames * num_symmetries * max_iter * sizeof(int));
     srand(time(0));
     size_t i = 0;
-
-    FILE *f;
 
     while(1) {
         if (i % save_interval == save_interval - 1) {
@@ -68,7 +88,7 @@ int main(int argc, char *argv[]) {
         double cx = 4 * uniform();
         double cy = 4 * uniform();
         double cz = 4 * uniform();
-        // Check main bulb.
+        // Check main bulb n=6.
         if (cx*cx + cy*cy + cz*cz < 0.345) {
             continue;
         }
@@ -83,11 +103,14 @@ int main(int argc, char *argv[]) {
             if (r > bailout) {
                 for (size_t k = 0; k < j; k++) {
                     for (size_t s = 0; s < num_symmetries; s++) {
-                        int index = trajectory[num_symmetries * k + s];
-                        if (index >= 0) {
-                            index += k * num_pixels;
-                            if (index < num_bins && bins[index] < BIN_MAX) {
-                                bins[index]++;
+                        for (size_t frame = 0; frame < num_frames; frame++) {
+                            size_t idx = num_symmetries * (frame + num_frames * j);
+                            int index = trajectory[idx + s];
+                            if (index >= 0) {
+                                index += (k * num_frames + frame) * num_pixels ;
+                                if (index < num_bins && bins[index] < BIN_MAX) {
+                                    bins[index]++;
+                                }
                             }
                         }
                     }
@@ -122,27 +145,41 @@ int main(int argc, char *argv[]) {
             // x = x * cos(6 * phi) + cx;
             // z = r * cos(6 * theta) + cz;
 
-            trajectory[num_symmetries * j] = to_index(x, y, z, width, height);
-            trajectory[num_symmetries * j + 1] = to_index(x, -y, z, width, height);
-            double tx = 0.30901699437494745 * x - 0.95105651629515353 * y;
-            double ty = 0.30901699437494745 * y + 0.95105651629515353 * x;
-            trajectory[num_symmetries * j + 2] = to_index(tx, ty, z, width, height);
-            trajectory[num_symmetries * j + 3] = to_index(tx, -ty, z, width, height);
-            double ttx = tx;
-            tx = 0.30901699437494745 * tx - 0.95105651629515353 * ty;
-            ty = 0.30901699437494745 * ty + 0.95105651629515353 * ttx;
-            trajectory[num_symmetries * j + 4] = to_index(tx, ty, z, width, height);
-            trajectory[num_symmetries * j + 5] = to_index(tx, -ty, z, width, height);
-            ttx = tx;
-            tx = 0.30901699437494745 * tx - 0.95105651629515353 * ty;
-            ty = 0.30901699437494745 * ty + 0.95105651629515353 * ttx;
-            trajectory[num_symmetries * j + 6] = to_index(tx, ty, z, width, height);
-            trajectory[num_symmetries * j + 7] = to_index(tx, -ty, z, width, height);
-            ttx = tx;
-            tx = 0.30901699437494745 * tx - 0.95105651629515353 * ty;
-            ty = 0.30901699437494745 * ty + 0.95105651629515353 * ttx;
-            trajectory[num_symmetries * j + 8] = to_index(tx, ty, z, width, height);
-            trajectory[num_symmetries * j + 9] = to_index(tx, -ty, z, width, height);
+            for (size_t frame = 0; frame < num_frames; frame++) {
+                size_t idx = num_symmetries * (frame + num_frames * j);
+                trajectory[idx] = to_index(x, y, z, frame, width, height);
+                trajectory[idx + 1] = to_index(x, -y, z, frame, width, height);
+                double tx = 0.30901699437494745 * x - 0.95105651629515353 * y;
+                double ty = 0.30901699437494745 * y + 0.95105651629515353 * x;
+                double mx = 0.30901699437494745 * x + 0.95105651629515353 * y;
+                double my = -0.30901699437494745 * y + 0.95105651629515353 * x;
+                trajectory[idx + 2] = to_index(tx, ty, z, frame, width, height);
+                trajectory[idx + 3] = to_index(mx, my, z, frame, width, height);
+                double temp = tx;
+                tx = 0.30901699437494745 * tx - 0.95105651629515353 * ty;
+                ty = 0.30901699437494745 * ty + 0.95105651629515353 * temp;
+                temp = mx;
+                tx = 0.30901699437494745 * mx - 0.95105651629515353 * my;
+                ty = 0.30901699437494745 * my + 0.95105651629515353 * temp;
+                trajectory[idx + 4] = to_index(tx, ty, z, frame, width, height);
+                trajectory[idx + 5] = to_index(mx, my, z, frame, width, height);
+                temp = tx;
+                tx = 0.30901699437494745 * tx - 0.95105651629515353 * ty;
+                ty = 0.30901699437494745 * ty + 0.95105651629515353 * temp;
+                temp = mx;
+                tx = 0.30901699437494745 * mx - 0.95105651629515353 * my;
+                ty = 0.30901699437494745 * my + 0.95105651629515353 * temp;
+                trajectory[idx + 6] = to_index(tx, ty, z, frame, width, height);
+                trajectory[idx + 7] = to_index(mx, my, z, frame, width, height);
+                temp = tx;
+                tx = 0.30901699437494745 * tx - 0.95105651629515353 * ty;
+                ty = 0.30901699437494745 * ty + 0.95105651629515353 * temp;
+                temp = mx;
+                tx = 0.30901699437494745 * mx - 0.95105651629515353 * my;
+                ty = 0.30901699437494745 * my + 0.95105651629515353 * temp;
+                trajectory[idx + 8] = to_index(tx, ty, z, frame, width, height);
+                trajectory[idx + 9] = to_index(mx, my, z, frame, width, height);
+            }
         }
     }
 
