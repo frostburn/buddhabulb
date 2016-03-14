@@ -30,29 +30,32 @@ int main(int argc, char *argv[]) {
     bin_t *temp = malloc(num_pixels * sizeof(bin_t));
 
     FILE *f = fopen("buddhabulb_bins.dat", "rb");
-    // for (int i = layer; i < num_layers; i++) {
-    //     get_layer(i, frame, num_frames, f, temp, num_pixels);
-    //     for (int j = 0; j < num_pixels; j++) {
-    //         for (int c = 0; c < 3; c++) {
-    //             if (c == 0) {
-    //                 bins[3 * j + c] += temp[j] * (1 + exp(-0.007 * pow(i - 5, 2)) * 0.2);
-    //             }
-    //             if (c == 1) {
-    //                 bins[3 * j + c] += temp[j] * exp(-0.007 * pow(i - 6, 2)) * 1.5;
-    //             }
-    //             if (c == 2) {
-    //                 bins[3 * j + c] += temp[j] * (exp(-0.0006 * pow(i - 100, 2)) * 4.5 + i % 2);
-    //             }
-    //         }
-    //     }
-    // }
 
-    get_layer(layer, frame, num_frames, f, temp, num_pixels);
-    for (int j = 0; j < num_pixels; j++) {
-        for (int c = 0; c < 3; c++) {
-            bins[3 * j + c] += temp[j];
+    #ifdef SINGLE_LAYER
+        get_layer(layer, frame, num_frames, f, temp, num_pixels);
+        for (int j = 0; j < num_pixels; j++) {
+            for (int c = 0; c < 3; c++) {
+                bins[3 * j + c] += temp[j];
+            }
         }
-    }
+    #else
+        for (int i = layer; i < num_layers; i++) {
+            get_layer(i, frame, num_frames, f, temp, num_pixels);
+            for (int j = 0; j < num_pixels; j++) {
+                for (int c = 0; c < 3; c++) {
+                    if (c == 0) {
+                        bins[3 * j + c] += temp[j] * exp(-0.001 * pow(i - 35, 2)) * 2;
+                    }
+                    if (c == 1) {
+                        bins[3 * j + c] += temp[j] * exp(-0.006 * pow(i - 6, 2));
+                    }
+                    if (c == 2) {
+                        bins[3 * j + c] += temp[j] * exp(-0.007 * pow(i, 2)) * 1.2;
+                    }
+                }
+            }
+        }
+    #endif
 
     fclose(f);
 
@@ -72,15 +75,19 @@ int main(int argc, char *argv[]) {
     color_t *img = malloc(3 * num_pixels * sizeof(color_t));
     for (int i = 0; i < 3 * num_pixels; i++) {
         double v = ((double) bins[i]) / normalizer;
-        if (i % 3 == 2) {
-            v = tanh(6 * (v - 0.66)) * 0.5 + 0.5;
-        }
-        else if (i % 3 == 1) {
-            v = tanh(4 * (v - 0.33)) * 0.5 + 0.5;
-        }
-        else {
-            v = tanh(4 * v);
-        }
+        #ifdef SINGLE_LAYER
+            if (i % 3 == 2) {
+                v = tanh(6 * (v - 0.66)) * 0.5 + 0.5;
+            }
+            else if (i % 3 == 1) {
+                v = tanh(4 * (v - 0.33)) * 0.5 + 0.5;
+            }
+            else {
+                v = tanh(4 * v);
+            }
+        #else
+            v = tanh(5 * v);
+        #endif
         img[i] = (color_t) (255 * v);
     }
     f = fopen("out.raw", "wb");

@@ -2,11 +2,11 @@ import subprocess
 
 width = 300
 height = 300
-layer = 0
+layer = 1
 num_layers = 50
 num_frames = 60
 
-normalizer = 140000
+normalizer = 350000
 
 subprocess.call(["rm", "tmp/*.rgb"])
 # subprocess.call(["rm", "./tmp/*.png"])

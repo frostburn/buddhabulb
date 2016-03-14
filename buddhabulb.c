@@ -55,6 +55,19 @@ int main(int argc, char *argv[]) {
         assert(fread((void*) bins, sizeof(bin_t), num_bins, f));
         fclose(f);
         printf("Load done\n");
+
+        // bin_t *temp = malloc(num_bins * sizeof(bin_t));
+        // f = fopen("buddhabulb_bins2.dat", "rb");
+        // assert(fread((void*) temp, sizeof(bin_t), num_bins, f));
+        // fclose(f);
+        // for (size_t i = 0; i < num_bins; i++) {
+        //     bins[i] += temp[i];
+        // }
+        // f = fopen("buddhabulb_bins.dat", "wb");
+        // fwrite((void*) bins, sizeof(bin_t), num_bins, f);
+        // fclose(f);
+        // printf("Merge done\n");
+        // return 0;
     }
 
     COSINES = malloc(sizeof(double) * num_frames);
