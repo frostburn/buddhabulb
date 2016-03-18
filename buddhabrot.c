@@ -5,18 +5,44 @@
 #include <limits.h>
 #include "buddhabrot.h"
 
-double uniform() {
-    return 2 * (((double) rand()) / RAND_MAX) - 1;
+double unifrm (){
+    return 9.313225750491594e-10 * rand() - 1;
 }
 
-size_t to_index(double x, double y, size_t width, size_t height) {
+void uniform(double *x, double *y) {
+    int r = rand();
+    *x = 3.0518043793392844e-05 * (r & 65535) - 1;
+    *y = 6.103701895199438e-05 * (r >> 16) - 1;
+
+}
+
+void gauss(double *x, double *y) {
+    double tx, ty;
+    uniform(x, y);
+    uniform(&tx, &ty);
+    *x += tx;
+    *y += ty;
+    uniform(&tx, &ty);
+    *x += tx;
+    *y += ty;
+    uniform(&tx, &ty);
+    *x += tx;
+    *y += ty;
+}
+
+size_t to_index(double x, double y, double cx, double cy, double zoom, size_t width, size_t height) {
     // Aspect ratio 1:1 with a little zoom.
     // x = (x + 2.2) * 0.333;
     // y = (y + 1.5) * 0.333;
 
-    // Aspect ratio 3:2
-    x = (x + 3) * 0.1666666666666;
-    y = (y + 2) * 0.25;
+    x -= cx;
+    y -= cy;
+    x *= zoom;
+    y *= zoom;
+
+    x += 0.5;
+    y += 0.5;
+    x *= ((double) height) / ((double) width);
 
     if (x < 0 || x > 1 || y < 0 || y > 1) {
         return -1;
@@ -31,27 +57,34 @@ size_t to_index(double x, double y, size_t width, size_t height) {
 }
 
 int main(int argc, char *argv[]) {
-    size_t width = 1920;
-    size_t height = 1280;
+    assert(RAND_MAX == 2147483647);
+
+    if (argc < 7) {
+        printf("Need width, height, number of layers, center x, center y and zoom.\n");
+        return 1;
+    }
+    int width = atoi(argv[1]);
+    int height = atoi(argv[2]);
+    int num_layers = atoi(argv[3]);
+    double center_x = atof(argv[4]);
+    double center_y = atof(argv[5]);
+    double zoom = atof(argv[6]);
     size_t num_pixels = width * height;
     size_t max_iter = 2000;
-    size_t num_layers = 0;
-    size_t max_layer = 0;
-    size_t save_interval = 1000000000;
+    size_t save_interval = 100000000;
+    double bailout = 16;
     #ifdef FULL_DECOMPOSE
         for (int i = 0; i < max_iter - 1; i++) {
             for (int j = 0; j < i; j++) {
                 num_layers++;
             }
         }
-    #else
-        num_layers = 150;
     #endif
     size_t num_bins = num_pixels * num_layers;
     bin_t *bins = calloc(num_bins, sizeof(bin_t));
 
     FILE *f;
-    if (argc > 1) {
+    if (argc == 8) {
         f = fopen("buddhabrot_bins.dat", "rb");
         assert(fread((void*) bins, sizeof(bin_t), num_bins, f));
         fclose(f);
@@ -69,13 +102,17 @@ int main(int argc, char *argv[]) {
         }
         i++;
 
-        double cx = 3 * uniform();
-        double cy = 3 * uniform();
+        double cx, cy;
+        gauss(&cx, &cy);
+        cx *= 0.1;
+        cy *= 0.1;
+        cx -= 1.3;
+        cy += 0.2;
 
         // Check bailout.
         double cx2 = cx * cx;
         double cy2 = cy * cy;
-        if (cx2 + cy2 > 9) {
+        if (cx2 + cy2 > bailout) {
             continue;
         }
 
@@ -94,7 +131,7 @@ int main(int argc, char *argv[]) {
         for (int j = 0; j < max_iter; j++) {
             double x2 = x*x;
             double y2 = y*y;
-            if (x2 + y2 > 9) {
+            if (x2 + y2 > bailout) {
                 #ifdef FULL_DECOMPOSE
                     size_t layer = ((j - 1) * (j - 2)) / 2;
                 #endif
@@ -115,7 +152,7 @@ int main(int argc, char *argv[]) {
             }
             y = 2 * x*y + cy;
             x = x2 - y2 + cx;
-            trajectory[j] = to_index(x, y, width, height);
+            trajectory[j] = to_index(x, y, center_x, center_y, zoom, width, height);
         }
     }
 
